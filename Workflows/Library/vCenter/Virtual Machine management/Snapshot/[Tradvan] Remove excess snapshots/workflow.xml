@@ -1,0 +1,369 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ns2:workflow xmlns:ns2="http://vmware.com/vco/workflow" root-name="item0" object-name="Workflow:name=generic" id="0ddd32c7-c46e-4f4d-81e6-64caa0f7da01" editor-version="2.0" version="1.1.2" api-version="6.0.0" allowed-operations="vef" restartMode="1" resumeFromFailedMode="0">
+    <display-name>[Tradvan] Remove excess snapshots</display-name>
+    <description>Finds virtual machines with more than a given number of snapshots and optionally deletes the oldest snapshots. Sends the results by email.</description>
+    <position y="70.0" x="180.0"/>
+    <input>
+        <param name="numberOfSnapshotMax" type="number">
+            <description>The maximum number of snapshots to allow for a given virtual machine.</description>
+        </param>
+        <param name="sendEmail" type="boolean">
+            <description>Send notification email on completion?</description>
+        </param>
+        <param name="toAddress" type="string">
+            <description>Destination address for the notification email</description>
+        </param>
+        <param name="fromAddress" type="string">
+            <description>Notification email sender address</description>
+        </param>
+        <param name="fromName" type="string">
+            <description>Notification email sender name</description>
+        </param>
+        <param name="password" type="SecureString">
+            <description>Password</description>
+        </param>
+        <param name="username" type="string">
+            <description>Username</description>
+        </param>
+        <param name="smtpPort" type="number">
+            <description>SMTP port</description>
+        </param>
+        <param name="smtpHost" type="string">
+            <description>SMTP host</description>
+        </param>
+        <param name="vm_name" type="string"/>
+    </input>
+    <output/>
+    <attrib name="snapshots" type="Array/VC:VirtualMachineSnapshot">
+        <value encoded="n"/>
+        <description>Array of virtual machine snapshots</description>
+    </attrib>
+    <attrib name="content" type="string">
+        <value encoded="n">Result =&gt;</value>
+        <description>Content of the notification email</description>
+    </attrib>
+    <attrib name="subject" type="string">
+        <value encoded="n">Result of the workflow 'Find Vm with Lot Of snapshot and remove the oldest'</value>
+        <description>Subject of the notification email</description>
+    </attrib>
+    <attrib name="vmWithLotSnapshots" type="Array/VC:VirtualMachine">
+        <value encoded="n"/>
+        <description>Array of virtual machines that more than the maximum number of snapshots</description>
+    </attrib>
+    <attrib name="vmsLength" type="number">
+        <value encoded="n">0.0</value>
+        <description>Number of virtual machines to process</description>
+    </attrib>
+    <attrib name="numberOfSnapshotLeft" type="number">
+        <value encoded="n"/>
+        <description>Number of snapshots remaining</description>
+    </attrib>
+    <attrib name="vmCount" type="number">
+        <value encoded="n">0.0</value>
+        <description>Number of virtual machines to process</description>
+    </attrib>
+    <attrib name="currentVM" type="number">
+        <value encoded="n">0.0</value>
+        <description>Index of the virtual machine in the array virtual machines</description>
+    </attrib>
+    <attrib name="activeVM" type="VC:VirtualMachine">
+        <value encoded="n"/>
+        <description>Virtual machine currently being processed</description>
+    </attrib>
+    <attrib name="errorCode" type="string">
+        <value encoded="n"></value>
+        <description>Error code</description>
+    </attrib>
+    <attrib name="useStartTls" type="boolean">
+        <value encoded="n">false</value>
+    </attrib>
+    <attrib name="useSsl" type="boolean">
+        <value encoded="n">false</value>
+    </attrib>
+    <attrib name="wantToContinue" type="boolean">
+        <value encoded="n">true</value>
+    </attrib>
+    <workflow-item name="item0" out-name="item1" type="task" comparator="0">
+        <display-name>Get vms</display-name>
+        <script encoded="false">vmWithLotSnapshots = new Array();
+var vms = VcPlugin.getAllVirtualMachines();
+
+for(i in vms){
+	var vm = vms[i];
+	if(vm.runtime.connectionState.value=="connected" &amp;&amp; !vm.config.template &amp;&amp; vm.name == vm_name ){
+		var actionResult = System.getModule("com.vmware.library.vc.vm.snapshot").getAllSnapshotsOfVM(vm);
+		if(actionResult.length &gt; numberOfSnapshotMax){
+			vmWithLotSnapshots.push(vm);
+			System.log("VM name : " + vm.name + " - Number of snapshots : " + actionResult.length);
+		}
+	}
+}
+vmsLength=vmWithLotSnapshots.length;</script>
+        <in-binding>
+            <bind name="numberOfSnapshotMax" type="number" export-name="numberOfSnapshotMax"/>
+            <bind name="vmWithLotSnapshots" type="Array/VC:VirtualMachine" export-name="vmWithLotSnapshots"/>
+            <bind name="vmsLength" type="number" export-name="vmsLength"/>
+            <bind name="vm_name" type="string" export-name="vm_name"/>
+        </in-binding>
+        <out-binding>
+            <bind name="vmWithLotSnapshots" type="Array/VC:VirtualMachine" export-name="vmWithLotSnapshots"/>
+            <bind name="vmsLength" type="number" export-name="vmsLength"/>
+        </out-binding>
+        <position y="80.0" x="140.0"/>
+    </workflow-item>
+    <workflow-item name="item1" out-name="item2" alt-out-name="item3" type="custom-condition" comparator="0">
+        <display-name>Have any vms?</display-name>
+        <script encoded="false">return vmWithLotSnapshots.length&gt;0;</script>
+        <in-binding>
+            <bind name="vmWithLotSnapshots" type="Array/VC:VirtualMachine" export-name="vmWithLotSnapshots"/>
+        </in-binding>
+        <out-binding/>
+        <position y="130.0" x="140.0"/>
+    </workflow-item>
+    <workflow-item name="item2" out-name="item4" type="input" comparator="0">
+        <display-name>Want to remove snapshots?</display-name>
+        <in-binding>
+            <bind name="security.group" type="LdapGroup" export-name="NULL">
+                <description>Any user member of this security group will be authorized to answer this 'Input'</description>
+            </bind>
+            <bind name="timeout.date" type="Date" export-name="NULL">
+                <description>If not null, this input item will wait until date and will continue workflow execution.</description>
+            </bind>
+            <bind name="vmsLength" type="number" export-name="vmsLength"/>
+            <bind name="numberOfSnapshotMax" type="number" export-name="numberOfSnapshotMax"/>
+            <bind name="numberOfSnapshotLeft" type="number" export-name="numberOfSnapshotLeft"/>
+        </in-binding>
+        <out-binding>
+            <bind name="numberOfSnapshotLeft" type="number" export-name="numberOfSnapshotLeft"/>
+            <bind name="vmWithLotSnapshots" type="Array/VC:VirtualMachine" export-name="vmWithLotSnapshots"/>
+            <bind name="wantToContinue" type="boolean" export-name="wantToContinue"/>
+        </out-binding>
+        <presentation>
+            <p-step>
+                <title>Snapshots</title>
+                <desc>There is ${vmsLength} virtual machine with more than ${numberOfSnapshotMax} snapshots</desc>
+                <p-param name="numberOfSnapshotLeft">
+                    <desc>How many snapshots on each virtual machine would you like to keep?</desc>
+                    <p-qual kind="static" name="mandatory" type="boolean">true</p-qual>
+                    <p-qual kind="static" name="numberFormat" type="String">##</p-qual>
+                    <p-qual kind="static" name="minNumberValue" type="Number">0</p-qual>
+                </p-param>
+                <p-param name="vmWithLotSnapshots">
+                    <desc>Choose the VMs where you want to remove the oldest snapshot</desc>
+                </p-param>
+                <p-param name="wantToContinue">
+                    <desc>Are you sure that you want to continue?</desc>
+                </p-param>
+            </p-step>
+        </presentation>
+        <position y="140.0" x="280.0"/>
+    </workflow-item>
+    <workflow-item name="item8" type="end" end-mode="0" comparator="0">
+        <in-binding/>
+        <out-binding/>
+        <position y="250.0" x="180.0"/>
+    </workflow-item>
+    <workflow-item name="item9" out-name="item10" type="task" comparator="0">
+        <display-name>Initialize</display-name>
+        <script encoded="false">vmCount = vmWithLotSnapshots.length;
+currentVM = 0;</script>
+        <in-binding>
+            <bind name="vmWithLotSnapshots" type="Array/VC:VirtualMachine" export-name="vmWithLotSnapshots"/>
+        </in-binding>
+        <out-binding>
+            <bind name="vmCount" type="number" export-name="vmCount"/>
+            <bind name="currentVM" type="number" export-name="currentVM"/>
+            <bind name="vmWithLotSnapshots" type="Array/VC:VirtualMachine" export-name="vmWithLotSnapshots"/>
+        </out-binding>
+        <position y="80.0" x="440.0"/>
+    </workflow-item>
+    <workflow-item name="item10" out-name="item11" alt-out-name="item17" type="custom-condition" comparator="0">
+        <display-name>VMs to Process?</display-name>
+        <script encoded="false">if(allVMs.length &gt; 0){
+	return true;
+}else{
+	return false;
+}</script>
+        <in-binding>
+            <bind name="allVMs" type="Array/VC:VirtualMachine" export-name="vmWithLotSnapshots"/>
+        </in-binding>
+        <out-binding/>
+        <position y="130.0" x="440.0"/>
+    </workflow-item>
+    <workflow-item name="item11" out-name="item12" alt-out-name="item19" type="custom-condition" comparator="0">
+        <display-name>VMs remaining?</display-name>
+        <script encoded="false">System.sleep(2000);
+if (currentVM &lt; vmCount){
+	return true;
+}else{
+	return false;
+}</script>
+        <in-binding>
+            <bind name="currentVM" type="number" export-name="currentVM"/>
+            <bind name="vmCount" type="number" export-name="vmCount"/>
+        </in-binding>
+        <out-binding/>
+        <position y="130.0" x="600.0"/>
+    </workflow-item>
+    <workflow-item name="item12" out-name="item13" type="task" comparator="0">
+        <display-name>Set VM</display-name>
+        <script encoded="false">// Set our activeVM object:
+var activeVM = allVMs[currentVM];
+</script>
+        <in-binding>
+            <bind name="allVMs" type="Array/VC:VirtualMachine" export-name="vmWithLotSnapshots"/>
+            <bind name="currentVM" type="number" export-name="currentVM"/>
+        </in-binding>
+        <out-binding>
+            <bind name="activeVM" type="VC:VirtualMachine" export-name="activeVM"/>
+        </out-binding>
+        <position y="140.0" x="760.0"/>
+    </workflow-item>
+    <workflow-item name="item14" out-name="item11" type="task" comparator="0">
+        <display-name>Increment Counter</display-name>
+        <script encoded="false">currentVM++;
+activeVM = allVMs[currentVM];
+System.sleep(2000);</script>
+        <in-binding>
+            <bind name="allVMs" type="Array/VC:VirtualMachine" export-name="vmWithLotSnapshots"/>
+            <bind name="currentVM" type="number" export-name="currentVM"/>
+        </in-binding>
+        <out-binding>
+            <bind name="currentVM" type="number" export-name="currentVM"/>
+            <bind name="activeVM" type="VC:VirtualMachine" export-name="activeVM"/>
+        </out-binding>
+        <position y="80.0" x="600.0"/>
+    </workflow-item>
+    <workflow-item name="item15" out-name="item14" type="task" comparator="0">
+        <display-name>Log the error</display-name>
+        <script encoded="false">// Ignore error if no change before last snapshot
+System.warn("Error when trying to remove the old snapshot in the Virtual machine '" + activeVM.name + "'.");
+</script>
+        <in-binding>
+            <bind name="activeVM" type="VC:VirtualMachine" export-name="activeVM"/>
+            <bind name="errorCode" type="string" export-name="errorCode"/>
+        </in-binding>
+        <out-binding/>
+        <description>Ignore error if no change before last snapshot</description>
+        <position y="20.0" x="760.0"/>
+    </workflow-item>
+    <workflow-item name="item17" out-name="item18" type="task" comparator="0">
+        <display-name>No snapshot to remove</display-name>
+        <script encoded="false">System.log("You choose to not remove any snapshot.");</script>
+        <in-binding>
+            <bind name="numberOfSnapshotMax" type="number" export-name="numberOfSnapshotMax"/>
+        </in-binding>
+        <out-binding/>
+        <position y="200.0" x="440.0"/>
+    </workflow-item>
+    <workflow-item name="item18" type="end" end-mode="0" comparator="0">
+        <in-binding/>
+        <out-binding/>
+        <position y="250.0" x="480.0"/>
+    </workflow-item>
+    <workflow-item name="item13" out-name="item14" catch-name="item15" throw-bind-name="errorCode" type="task" comparator="0">
+        <display-name>Remove snapshots</display-name>
+        <script encoded="false">var vm = activeVM;	
+var snapshotsInVm = System.getModule("com.vmware.library.vc.vm.snapshot").getAllSnapshotsOfVM(vm);
+var snapshotLength = snapshotsInVm.length;
+var numberOfSnapshotToDelete = snapshotLength-numberOfSnapshotLeft;
+System.getModule("com.vmware.library.vc.vm.snapshot").removeOldestSnapshotOfVM(vm,numberOfSnapshotToDelete) ;
+content = content + "&lt;br&gt;The " + numberOfSnapshotToDelete + " oldest snapshots of the VM " + vm.name + " have been removed";
+System.log("The " + numberOfSnapshotToDelete + " oldest snapshots of the VM " + vm.name + " have been removed");
+
+
+
+</script>
+        <in-binding>
+            <bind name="snapshots" type="Array/VC:VirtualMachineSnapshot" export-name="snapshots"/>
+            <bind name="content" type="string" export-name="content"/>
+            <bind name="sendEmail" type="boolean" export-name="sendEmail"/>
+            <bind name="vmWithLotSnapshots" type="Array/VC:VirtualMachine" export-name="vmWithLotSnapshots"/>
+            <bind name="numberOfSnapshotLeft" type="number" export-name="numberOfSnapshotLeft"/>
+            <bind name="activeVM" type="VC:VirtualMachine" export-name="activeVM"/>
+        </in-binding>
+        <out-binding>
+            <bind name="content" type="string" export-name="content"/>
+        </out-binding>
+        <position y="80.0" x="760.0"/>
+    </workflow-item>
+    <workflow-item name="item19" out-name="item20" alt-out-name="item22" type="custom-condition" comparator="0">
+        <display-name>Send an email?</display-name>
+        <script encoded="false">return sendEmail;</script>
+        <in-binding>
+            <bind name="sendEmail" type="boolean" export-name="sendEmail"/>
+        </in-binding>
+        <out-binding/>
+        <position y="190.0" x="600.0"/>
+    </workflow-item>
+    <workflow-item name="item20" out-name="item21" type="link" linked-workflow-id="8D80808080808080808080808080808089808080012318760241416446ce5b52f" comparator="0">
+        <display-name>Email Send (Notification)</display-name>
+        <in-binding>
+            <bind name="smtpHost" type="string" export-name="smtpHost">
+                <description>STMP Host</description>
+            </bind>
+            <bind name="smtpPort" type="number" export-name="smtpPort">
+                <description>SMTP Port</description>
+            </bind>
+            <bind name="username" type="string" export-name="username">
+                <description>Username for authentication</description>
+            </bind>
+            <bind name="password" type="SecureString" export-name="password">
+                <description>Password for authentication</description>
+            </bind>
+            <bind name="fromName" type="string" export-name="fromName">
+                <description>from name</description>
+            </bind>
+            <bind name="fromAddress" type="string" export-name="fromAddress">
+                <description>from address</description>
+            </bind>
+            <bind name="toAddress" type="string" export-name="toAddress">
+                <description>destination address</description>
+            </bind>
+            <bind name="subject" type="string" export-name="subject">
+                <description>email title</description>
+            </bind>
+            <bind name="content" type="string" export-name="content">
+                <description>content (text or html text)</description>
+            </bind>
+            <bind name="useStartTls" type="boolean" export-name="useStartTls"/>
+            <bind name="useSsl" type="boolean" export-name="useSsl"/>
+        </in-binding>
+        <out-binding/>
+        <description>Send an email with a text content to given email address.
+
+Use default settings (from Configuration), for these optional input parameters:
+STMP host, SMTP port, username, password, from Address and from Name.
+
+You can override these values by providing input parameters.</description>
+        <position y="260.0" x="600.0"/>
+    </workflow-item>
+    <workflow-item name="item21" type="end" end-mode="0" comparator="0">
+        <in-binding/>
+        <out-binding/>
+        <position y="310.0" x="640.0"/>
+    </workflow-item>
+    <workflow-item name="item22" type="end" end-mode="0" comparator="0">
+        <in-binding/>
+        <out-binding/>
+        <position y="190.0" x="780.0"/>
+    </workflow-item>
+    <workflow-item name="item3" out-name="item8" type="task" comparator="0">
+        <display-name>No snapshot to remove</display-name>
+        <script encoded="false">System.log("No VM with more than "+numberOfSnapshotMax+" snapshots.");</script>
+        <in-binding>
+            <bind name="numberOfSnapshotMax" type="number" export-name="numberOfSnapshotMax"/>
+        </in-binding>
+        <out-binding/>
+        <position y="200.0" x="140.0"/>
+    </workflow-item>
+    <workflow-item name="item4" out-name="item9" alt-out-name="item8" type="custom-condition" comparator="0">
+        <display-name>Continue?</display-name>
+        <script encoded="false">return wantToContinue;</script>
+        <in-binding>
+            <bind name="wantToContinue" type="boolean" export-name="wantToContinue"/>
+        </in-binding>
+        <out-binding/>
+        <position y="190.86363636363635" x="285.0"/>
+    </workflow-item>
+</ns2:workflow>
